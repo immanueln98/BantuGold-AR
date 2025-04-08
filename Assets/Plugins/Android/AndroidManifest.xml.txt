@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.yourcompany.artshirtapp">
+    
+    <!-- Permissions for AR and camera functionality -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <!-- This is used by ARCore -->
+    <uses-feature android:name="android.hardware.camera.ar" android:required="true"/>
+    
+    <application
+        android:theme="@style/UnityThemeSelector"
+        android:icon="@drawable/app_icon"
+        android:label="@string/app_name">
+        
+        <activity 
+            android:name="com.unity3d.player.UnityPlayerActivity"
+            android:label="@string/app_name"
+            android:screenOrientation="portrait">
+            
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            
+            <meta-data 
+                android:name="unityplayer.UnityActivity" 
+                android:value="true" />
+        </activity>
+        
+        <!-- ARCore requirement -->
+        <meta-data 
+            android:name="com.google.ar.core" 
+            android:value="required" />
+    </application>
+</manifest>
