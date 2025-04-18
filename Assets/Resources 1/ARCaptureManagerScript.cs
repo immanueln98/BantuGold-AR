@@ -5,10 +5,7 @@ using System.Collections;
 public class ARCaptureManager : MonoBehaviour
 {
     [Header("Capture Settings")]
-    [Tooltip("Directory name within gallery where captures are saved")]
     public string albumName = "AR T-Shirt";
-    
-    [Tooltip("Sound played when taking a photo")]
     public AudioClip shutterSound;
     
     // Internal variables
@@ -22,15 +19,27 @@ public class ARCaptureManager : MonoBehaviour
     
     void Start()
     {
-        // Set up save path in device's documents directory
+        // Set up save path in a public directory that will be scanned
+        #if UNITY_ANDROID
+        // On Android, we'll use DCIM folder which is regularly scanned
         savePath = Path.Combine(Application.persistentDataPath, "ARCaptures");
+        #else
+        savePath = Path.Combine(Application.persistentDataPath, "ARCaptures");
+        #endif
+        
         if (!Directory.Exists(savePath))
         {
             Directory.CreateDirectory(savePath);
+            Debug.Log("Created directory: " + savePath);
         }
         
         // Set up audio source for capture sound
-        audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource = gameObject.GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+        
         if (shutterSound != null)
         {
             audioSource.clip = shutterSound;
@@ -54,6 +63,8 @@ public class ARCaptureManager : MonoBehaviour
             audioSource.Play();
         }
         
+        Debug.Log("Taking screenshot...");
+        
         // Wait for the end of the frame to ensure all rendering is complete
         yield return new WaitForEndOfFrame();
         
@@ -70,31 +81,53 @@ public class ARCaptureManager : MonoBehaviour
         byte[] bytes = screenshotTexture.EncodeToPNG();
         string filename = "AR_Screenshot_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png";
         string filePath = Path.Combine(savePath, filename);
-        File.WriteAllBytes(filePath, bytes);
         
-        lastCapturedPhotoPath = filePath;
-        
-        Debug.Log("Screenshot saved to: " + filePath);
-        
-        // Add to device gallery
-        StartCoroutine(AddToGallery(filePath));
-        
-        // Trigger the event
-        OnPhotoCaptured?.Invoke(filePath, screenshotTexture);
+        // Write the file
+        try {
+            File.WriteAllBytes(filePath, bytes);
+            Debug.Log("Screenshot saved to: " + filePath);
+            lastCapturedPhotoPath = filePath;
+            
+            // Add to device gallery
+            StartCoroutine(AddToGallery(filePath));
+            
+            // Trigger the event
+            OnPhotoCaptured?.Invoke(filePath, screenshotTexture);
+        } 
+        catch (System.Exception e) {
+            Debug.LogError("Failed to save screenshot: " + e.Message);
+        }
     }
     
     private IEnumerator AddToGallery(string filePath)
     {
         #if UNITY_ANDROID
-        // Android specific gallery addition
-        using (AndroidJavaClass jcUnityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
-        using (AndroidJavaObject joActivity = jcUnityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
-        using (AndroidJavaObject joContext = joActivity.Call<AndroidJavaObject>("getApplicationContext"))
-        using (AndroidJavaClass jcMediaScannerConnection = new AndroidJavaClass("android.media.MediaScannerConnection"))
-        {
-            jcMediaScannerConnection.CallStatic("scanFile", joContext, new string[] { filePath }, null, null);
-        }
+        Debug.Log("Adding to Android gallery: " + filePath);
         
+        try {
+            // Make sure the file exists
+            if (!File.Exists(filePath)) {
+                Debug.LogError("File doesn't exist: " + filePath);
+                yield break;
+            }
+            
+            // This is the critical part for Android gallery integration
+            using (AndroidJavaClass jcUnityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (AndroidJavaObject joActivity = jcUnityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+            using (AndroidJavaObject joContext = joActivity.Call<AndroidJavaObject>("getApplicationContext"))
+            using (AndroidJavaClass jcMediaScannerConnection = new AndroidJavaClass("android.media.MediaScannerConnection"))
+            {
+                Debug.Log("Calling MediaScannerConnection.scanFile");
+                string[] filePaths = new string[] { filePath };
+                string[] mimeTypes = new string[] { "image/png" }; // Specify mime type
+                jcMediaScannerConnection.CallStatic("scanFile", joContext, filePaths, mimeTypes, null);
+            }
+            
+            Debug.Log("Media scanner called successfully");
+        }
+        catch (System.Exception e) {
+            Debug.LogError("Error adding to gallery: " + e.Message);
+        }
         #elif UNITY_IOS
         // iOS specific gallery addition
         UnityEngine.iOS.Photos.SaveToAlbum(filePath, albumName, OnPhotoSavedToGallery);
